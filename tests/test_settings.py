@@ -389,6 +389,16 @@ class TestWeeklyThreshold:
         assert loaded.threshold == AutoSwitchSettings().threshold
         assert loaded.weekly_threshold is None
 
+    def test_an_integer_too_large_for_a_float_still_clamps(self, tmp_path: Path):
+        # Python ints are unbounded; isfinite() on one past float range raises
+        # OverflowError. The clamp must keep answering 99.9 for both lines.
+        huge = "1" + "0" * 400
+        settings_path(tmp_path).write_text(
+            '{"autoswitch": {"threshold": %s, "weeklyThreshold": %s}}' % (huge, huge)
+        )
+        loaded = load_settings(tmp_path)
+        assert (loaded.threshold, loaded.weekly_threshold) == (99.9, 99.9)
+
     def test_set_validates_loudly_and_unset_clears(self, tmp_path: Path):
         with pytest.raises(ConfigError, match="between 50 and 99.9"):
             set_setting(tmp_path, "autoswitch.weeklyThreshold", "970")

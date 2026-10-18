@@ -187,12 +187,14 @@ def _clamped(settings: AutoSwitchSettings) -> AutoSwitchSettings:
 
     def num(value, default: float | None, lo: float, hi: float) -> float | None:
         # json.loads accepts NaN/Infinity literals and min/max pass NaN
-        # through unclamped, so non-finite is garbage too (a NaN line would
-        # silently never be crossed).
+        # through unclamped, so a non-finite float is garbage too (a NaN line
+        # would silently never be crossed). Floats only: an int is always
+        # finite, and isfinite() would overflow on one too large for a float
+        # — the clamp below handles that without ever converting it.
         if (
             isinstance(value, bool)
             or not isinstance(value, (int, float))
-            or not math.isfinite(value)
+            or (isinstance(value, float) and not math.isfinite(value))
         ):
             return default
         return float(min(max(value, lo), hi))
