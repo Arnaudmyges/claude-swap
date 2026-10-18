@@ -1332,9 +1332,8 @@ class ClaudeAccountSwitcher:
                             f"accounts still work (`cswap list`), then delete "
                             f"the file and retry."
                         )
-                    fh = os.fdopen(fd, "w", encoding="utf-8")
-                    fd = -1  # the file object owns the descriptor now
-                    with fh:
+                    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                        fd = -1  # the file object owns the descriptor now
                         fh.write(content)
         except ConfigError:
             # Leftover found.
