@@ -1495,6 +1495,66 @@ class TestAutoScreen:
                 "user2@example.com"
             )
 
+    async def test_candidates_rank_by_policy_headroom_under_a_weekly_line(
+        self, tmp_path, fake_engine
+    ):
+        """The 'Next best' list is the engine's own ordering: under a weekly
+        line a 7d 93% account outranks a 5h 95% one (18.5 vs 5 policy points;
+        raw pct would put it last), each row names the window that binds and
+        the line it is judged against, and the summary shows the line."""
+        import json as _json
+
+        (tmp_path / "settings.json").write_text(_json.dumps({
+            "schemaVersion": 1,
+            "autoswitch": {"threshold": 85, "weeklyThreshold": 97},
+        }))
+        fake = FakeSwitcher(
+            [
+                make_account(1, active=True, entry=make_entry(91.0, 20.0)),
+                make_account(2, entry=make_entry(5.0, 93.0)),
+                make_account(3, entry=make_entry(95.0, 47.0)),
+            ],
+            tmp_path,
+        )
+        app = make_app(fake)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await self._open(pilot)
+            await settle(pilot)
+            from textual.widgets import Static
+
+            plain = app.screen.query_one("#candidates", Static).render().plain
+            assert plain.index("user2@example.com") < plain.index(
+                "user3@example.com"
+            )
+            assert "7d  93% used (line 97%)" in plain
+            assert "5h  95% used (line 85%)" in plain
+            summary = app.screen.query_one("#auto-summary", Static).render().plain
+            assert "threshold 85%" in summary and "weekly 97%" in summary
+            assert app.weekly_threshold_pct == 97.0
+
+    async def test_candidates_show_no_line_without_a_weekly_one(
+        self, tmp_path, fake_engine
+    ):
+        fake = FakeSwitcher(
+            [
+                make_account(1, active=True, entry=make_entry(91.0, 20.0)),
+                make_account(2, entry=make_entry(42.0, 10.0)),
+            ],
+            tmp_path,
+        )
+        app = make_app(fake)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await self._open(pilot)
+            await settle(pilot)
+            from textual.widgets import Static
+
+            plain = app.screen.query_one("#candidates", Static).render().plain
+            assert "5h  42% used" in plain
+            assert "(line" not in plain
+            summary = app.screen.query_one("#auto-summary", Static).render().plain
+            assert "weekly" not in summary
+            assert app.weekly_threshold_pct is None
+
     async def test_candidates_ranking_honors_configured_model(
         self, tmp_path, fake_engine
     ):
@@ -1709,4 +1769,5 @@ class TestThemeWiring:
             await menu_select(pilot, "theme:light")
             assert app._theme_name == "light"
             assert app.theme == "cswap-light"
+
 
