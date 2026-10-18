@@ -2349,7 +2349,7 @@ class TestPctLabel:
         details = [
             e.detail for e in h.events if isinstance(e, NoSwitchEvent)
         ]
-        assert details == ["50% < 99.9%"]
+        assert details == ["5h 50% < 99.9%"]
 
     def test_below_threshold_detail_never_shows_impossible_comparison(
         self, temp_home
@@ -2364,7 +2364,7 @@ class TestPctLabel:
         details = [
             e.detail for e in h.events if isinstance(e, NoSwitchEvent)
         ]
-        assert details == ["99.85% < 99.9%"]
+        assert details == ["5h 99.85% < 99.9%"]
 
 
 class TestTokenIdentity:
@@ -4559,17 +4559,20 @@ class TestHorizonAxisDoesNotFlap:
         # so the ratio release cannot fire and only the trigger check can
         # answer. A peer far ahead would pass for the wrong reason.
         headroom = {"1": 15.0, "2": 10.0, "3": 1.0}
+        usage = {n: _usage(100.0 - h) for n, h in headroom.items()}
         for trigger in ("at-limit", "failover"):
             for active in (10.0, None):
                 assert harness.engine._no_return_account(
-                    trigger, state, headroom, active, ["1", "3"], harness.settings
+                    trigger, state, headroom, active, ["1", "3"], harness.settings,
+                    usage=usage,
                 ) is None, (
                     f"trigger={trigger} active_headroom={active} barred the "
                     "account we left; an escape must reach every candidate"
                 )
         # The control: the SAME state bars on a proactive tick.
         assert harness.engine._no_return_account(
-            "proactive", state, headroom, 10.0, ["1", "3"], harness.settings
+            "proactive", state, headroom, 10.0, ["1", "3"], harness.settings,
+            usage=usage,
         ) == "1", "premise: these inputs are barred when the trigger allows it"
 
     @pytest.mark.parametrize(
@@ -4831,8 +4834,10 @@ class TestHorizonAxisDoesNotFlap:
         """
         state = {"lastSwitchFrom": 1}
         headroom = {"2": 10.0, "3": 40.0}       # slot 1 unreadable — absent
+        usage = {n: _usage(100.0 - h) for n, h in headroom.items()}
         assert harness.engine._no_return_account(
-            "proactive", state, headroom, 10.0, ["1", "3"], harness.settings
+            "proactive", state, headroom, 10.0, ["1", "3"], harness.settings,
+            usage=usage,
         ) == "1", (
             "an unreadable barred account must still bar — unknown headroom "
             "is not evidence it beats us"
@@ -5245,12 +5250,15 @@ class TestHorizonAxisDoesNotFlap:
         """
         state = {"lastSwitchFrom": "2", "leftHeadroom": 40.0, "leftRecoveryAt": None}
         headroom = {"2": 40.0}
+        usage = {n: _usage(100.0 - h) for n, h in headroom.items()}
         for trigger in ("proactive", "consume-first"):
             readable = harness.engine._no_return_account(
-                trigger, state, headroom, 2.0, recovered=True, settings=harness.settings
+                trigger, state, headroom, 2.0, recovered=True, settings=harness.settings,
+                usage=usage,
             )
             unreadable = harness.engine._no_return_account(
-                trigger, state, headroom, None, recovered=True, settings=harness.settings
+                trigger, state, headroom, None, recovered=True, settings=harness.settings,
+                usage=usage,
             )
             assert readable is None, f"premise: {trigger} releases when readable"
             assert unreadable is None, (
@@ -5330,9 +5338,10 @@ class TestHorizonAxisDoesNotFlap:
         """
         state = {"lastSwitchFrom": "2"}
         headroom = {"2": 5.0}
+        usage = {n: _usage(100.0 - h) for n, h in headroom.items()}
         no_return = harness.engine._no_return_account(
             "proactive", state, headroom, None, recovered=True,
-            settings=harness.settings,
+            settings=harness.settings, usage=usage,
         )
         assert no_return == "2", (
             "the barred peer at 5 pts is below the landing floor (10); an "
@@ -6532,10 +6541,12 @@ class TestTheReleasePredicateOneStateShapePerTest:
         """
         state = {"lastSwitchFrom": "2"}
         headroom = {"1": 0.0, "2": 100.0}
+        usage = {n: _usage(100.0 - h) for n, h in headroom.items()}
         for active in (0.0, None):
             for recovered in (True, False):
                 assert harness.engine._no_return_account(
-                    "at-limit", state, headroom, active, recovered, harness.settings
+                    "at-limit", state, headroom, active, recovered, harness.settings,
+                    usage=usage,
                 ) is None, (
                     "at-limit must escape the bar regardless of "
                     "active_headroom or the recovered predicate's answer"
