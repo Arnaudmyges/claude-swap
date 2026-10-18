@@ -1771,3 +1771,25 @@ class TestThemeWiring:
             assert app.theme == "cswap-light"
 
 
+class TestWeeklyTick:
+    def test_the_weekly_rows_tick_at_the_weekly_line(self):
+        from claude_swap.tui.widgets import _BAR_TICK, account_card_text
+
+        acc = make_account(
+            1, active=True, entry=make_entry(50.0, 50.0, scoped=[("Fable", 50.0)])
+        )
+
+        def ticks(**lines):
+            plain = account_card_text(acc, 100, **lines).plain
+            rows = {
+                ln.split()[0]: ln
+                for ln in plain.splitlines()
+                if ln.strip().startswith(("5h", "7d", "Fable"))
+            }
+            return {label: ln.index(_BAR_TICK) for label, ln in rows.items()}
+
+        with_weekly = ticks(threshold=85.0, weekly_threshold=97.0)
+        assert with_weekly["7d"] > with_weekly["5h"]
+        assert with_weekly["Fable"] == with_weekly["7d"]
+        without = ticks(threshold=85.0)
+        assert without["5h"] == without["7d"] == without["Fable"] == with_weekly["5h"]
