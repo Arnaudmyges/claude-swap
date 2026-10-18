@@ -1532,6 +1532,44 @@ class TestAutoScreen:
             assert "threshold 85%" in summary and "weekly 97%" in summary
             assert app.weekly_threshold_pct == 97.0
 
+    async def test_candidates_follow_a_session_threshold_adjust(
+        self, tmp_path, fake_engine
+    ):
+        """The list ranks by the lines in force: a session adjust must re-rank
+        it and move the 5h rows' line label at once, not at the next snapshot.
+        At 85/97 the 7d 93% row (18.5 policy points) outranks the 5h 83% row
+        (17); at 88/97 it falls to 15.6 and the order flips."""
+        import json as _json
+
+        (tmp_path / "settings.json").write_text(_json.dumps({
+            "schemaVersion": 1,
+            "autoswitch": {"threshold": 85, "weeklyThreshold": 97},
+        }))
+        fake = FakeSwitcher(
+            [
+                make_account(1, active=True, entry=make_entry(91.0, 20.0)),
+                make_account(2, entry=make_entry(83.0, 10.0)),
+                make_account(3, entry=make_entry(5.0, 93.0)),
+            ],
+            tmp_path,
+        )
+        app = make_app(fake)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await self._open(pilot)
+            await settle(pilot)
+            from textual.widgets import Static
+
+            plain = app.screen.query_one("#candidates", Static).render().plain
+            assert plain.index("user3@example.com") < plain.index("user2@example.com")
+            assert "5h  83% used (line 85%)" in plain
+            await pilot.press("t", "right", "right", "right")
+            await pilot.pause()
+            assert app.screen._settings.threshold == 88.0
+            plain = app.screen.query_one("#candidates", Static).render().plain
+            assert plain.index("user2@example.com") < plain.index("user3@example.com")
+            assert "5h  83% used (line 88%)" in plain
+            assert "7d  93% used (line 97%)" in plain
+
     async def test_candidates_show_no_line_without_a_weekly_one(
         self, tmp_path, fake_engine
     ):

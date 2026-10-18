@@ -192,6 +192,10 @@ class AutoScreen(Screen):
         self.app.threshold_pct = value
         self.query_one("#auto-active-panel", AccountsPanel).refresh()
         self._update_summary()
+        # The Next best list ranks by the lines in force, so it must follow
+        # the session value now rather than at the next snapshot: under a
+        # weekly line the order and the 5h rows' "(line N%)" both move.
+        self._on_snapshot(self.app.snapshot)
 
     def _update_summary(self) -> None:
         palette = Palette.from_theme(self.app.current_theme)
