@@ -2282,7 +2282,7 @@ class TestSessionThreshold:
         harness.engine.apply_threshold(72.0)
         assert harness.engine.settings.threshold == 72.0
         # Poll-cadence planning follows the new value immediately.
-        assert harness.switcher._poll_inputs_override == (72.0, ())
+        assert harness.switcher._poll_inputs_override == (72.0, None, ())
         # And the very next tick decides with it: 80% ≥ 72 switches, where
         # the constructed 90 would not have.
         outcome = harness.tick_with_usage({
