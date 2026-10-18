@@ -7015,9 +7015,38 @@ class TestWeeklyThreshold:
         assert self._reasons(h) == ["below-threshold"]
         # The detail quotes the comparison made: that window, its own line.
         assert self._details(h) == ["7d 93% < 97%"]
-        poll = next(e for e in h.events if isinstance(e, PollEvent)).to_json()
-        assert poll["windowsPct"]["1"] == {"5h": 5.0, "7d": 93.0}  # raw
-        assert poll["headroomPct"]["1"] == 7.0                      # raw
+        poll = next(e for e in h.events if isinstance(e, PollEvent))
+        payload = poll.to_json()
+        assert payload["windowsPct"]["1"] == {"5h": 5.0, "7d": 93.0}  # raw
+        assert payload["headroomPct"]["1"] == 7.0                      # raw
+        assert payload["threshold"] == 85.0
+        assert payload["weeklyThreshold"] == 97.0
+        assert "Account-1 (a@example.com): 7d 93% used (switch at 97%)" in poll.human()
+        assert "#2: 5h 95% · 7d 47%" in poll.human()                   # raw
+
+    def test_poll_event_omits_the_weekly_line_when_unset(self, temp_home):
+        h = self._harness(temp_home, weekly_threshold=None)
+        h.tick_with_usage({"1": _usage7(42, 10), "2": _usage7(5, 5)})
+        poll = next(e for e in h.events if isinstance(e, PollEvent))
+        assert "weeklyThreshold" not in poll.to_json()
+        assert "5h 42% used (switch at 85%)" in poll.human()
+
+    def test_poll_event_human_names_the_binding_window_and_its_line(self):
+        active = {"number": 1, "email": "a@example.com"}
+        with_windows = PollEvent(
+            active=active, headroom={"1": 7.0}, threshold=85.0,
+            windows={"1": {"5h": 5.0, "7d": 93.0}}, weekly_threshold=97.0,
+        )
+        assert "7d 93% used (switch at 97%)" in with_windows.human()
+        # No window data (older stores, sentinels): the account-wide form.
+        bare = PollEvent(active=active, headroom={"1": 7.0}, threshold=85.0,
+                         weekly_threshold=97.0)
+        assert "93% used (switch at 85%)" in bare.human()
+        default = PollEvent(
+            active=active, headroom={"1": 58.0}, threshold=90.0,
+            windows={"1": {"5h": 42.0, "7d": 10.0}},
+        )
+        assert "5h 42% used (switch at 90%)" in default.human()
 
     def test_s2_a_weekly_bound_candidate_is_taken_over_a_5h_bound_active(
         self, temp_home
