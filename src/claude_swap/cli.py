@@ -461,7 +461,14 @@ Examples:
             else:
                 print(dimmed(f"Nothing to do ({settings_file} already up to date)"))
         else:
-            _context_show(switcher, store, args.path or os.getcwd(), args.json)
+            # Bare `cswap context` never ran the `show` subparser, so its
+            # arguments are absent from the namespace.
+            _context_show(
+                switcher,
+                store,
+                getattr(args, "path", None) or os.getcwd(),
+                getattr(args, "json", False),
+            )
     except ValueError as e:
         error(f"Error: {e}")
         sys.exit(1)

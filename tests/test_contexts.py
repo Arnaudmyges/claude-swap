@@ -418,6 +418,13 @@ class TestContextCli(PolicyStoreBase):
         store = ContextStore(s.backup_dir)
         assert store.account_context("account-2@example.test", "") == WORK
 
+    def test_bare_context_shows_current_directory(self, temp_home, capsys, monkeypatch):
+        self._fleet(temp_home, count=1)
+        monkeypatch.chdir(temp_home)
+        cli._context_command([])
+        out = capsys.readouterr().out
+        assert "Mode:" in out and "personal" in out and "account-1@example.test" in out
+
     def test_account_needs_exactly_one_of_context_or_unset(self, temp_home):
         self._fleet(temp_home, count=1)
         with pytest.raises(SystemExit):
