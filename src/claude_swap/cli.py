@@ -338,7 +338,8 @@ def _hook_command_string() -> str:
     import shutil
 
     exe = shutil.which("cswap") or shutil.which("claude-swap")
-    return f"{exe} hook" if exe else "cswap hook"
+    # normpath: a PATH entry like ~/.local/share/../bin would leak into settings.json.
+    return f"{os.path.normpath(exe)} hook" if exe else "cswap hook"
 
 
 def _context_command(argv: list[str]) -> None:
