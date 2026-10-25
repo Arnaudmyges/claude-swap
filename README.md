@@ -182,7 +182,7 @@ as personal.
 ```bash
 cswap context account 2 work              # account 2 is the work licence
 cswap context set work ~/work             # everything under ~/work is work
-cswap context remote gitlab.acme.com work # repos with that remote are work
+cswap context remote github.com/acme work  # repos of that org (SSH or HTTPS) are work
 echo shared > .claude-context             # per-repo marker
 cswap context mode strict                 # or open / asymmetric
 cswap context install-hooks               # enforce inside Claude Code

@@ -132,6 +132,26 @@ def test_remote_hint(store, tmp_path):
     assert (r.context, r.source, r.detail) == (WORK, "remote", "gitlab.acme.com")
 
 
+@pytest.mark.parametrize("url", [
+    "git@github.com:Acme-Corp/vpn.git",
+    "ssh://git@github.com/Acme-Corp/vpn.git",
+    "https://github.com/Acme-Corp/vpn",
+    "https://token@github.com/acme-corp/vpn.git",
+    "git@github-work:Acme-Corp/vpn.git",  # ~/.ssh/config host alias
+])
+def test_remote_hint_matches_ssh_and_https_spellings(store, tmp_path, url):
+    repo = _git_repo(tmp_path / "vpn", url)
+    store.set_remote("https://github.com/Acme-Corp", WORK)
+    store.set_remote("github-work", WORK)
+    assert store.resolve(repo).context == WORK
+
+
+def test_remote_hint_does_not_match_other_org(store, tmp_path):
+    repo = _git_repo(tmp_path / "r", "git@github.com:acme-corporation-fan/x.git")
+    store.set_remote("github.com/acme-corp/", WORK)
+    assert store.resolve(repo).source == "default"
+
+
 def test_longest_remote_pattern_wins(store, tmp_path):
     repo = _git_repo(tmp_path / "r", "https://gitlab.acme.com/oss/tool.git")
     store.set_remote("gitlab.acme.com", WORK)

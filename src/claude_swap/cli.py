@@ -366,7 +366,7 @@ Examples:
   cswap context set work ~/work         # everything under ~/work is work
   cswap context set shared              # this directory accepts any account
   cswap context account 2 work          # account 2 is the work licence
-  cswap context remote gitlab.acme.com work   # repos pushed there are work
+  cswap context remote github.com/acme work   # repos of that org are work
   cswap context mode strict
   cswap context install-hooks           # enforce it inside Claude Code
   echo work > .claude-context           # per-repo marker, also honoured
@@ -397,7 +397,9 @@ Examples:
     p_default = sub.add_parser("default", help="Context of directories no rule covers")
     p_default.add_argument("context", nargs="?", choices=ctx.DIRECTORY_CONTEXTS)
 
-    p_remote = sub.add_parser("remote", help="Map a git remote URL substring to a context")
+    p_remote = sub.add_parser(
+        "remote", help="Map a git remote prefix (host[/org]) to a context"
+    )
     p_remote.add_argument("pattern", nargs="?", metavar="PATTERN")
     p_remote.add_argument("context", nargs="?", choices=ctx.DIRECTORY_CONTEXTS)
     p_remote.add_argument("--unset", action="store_true", help="Remove the hint")

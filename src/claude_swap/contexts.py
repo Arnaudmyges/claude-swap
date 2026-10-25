@@ -19,8 +19,9 @@ Directory contexts resolve nearest-first, walking up from the directory:
 1. an explicit path rule (``cswap context set work ~/work``), or a
    ``.claude-context`` marker file holding ``work``, ``personal`` or
    ``shared`` — whichever sits closest to the directory wins;
-2. a git-remote hint (``cswap context remote gitlab.acme.com work``) matched
-   against the enclosing repository's remote URLs;
+2. a git-remote hint (``cswap context remote github.com/acme work``): a
+   ``host[/path]`` prefix matched, segment by segment, against the enclosing
+   repository's remote URLs, SSH and HTTPS spellings alike;
 3. the configured default (``personal`` unless changed).
 
 Accounts nobody tagged count as ``personal``: a work directory never runs on
@@ -175,6 +176,35 @@ def git_remote_urls(repo_root: Path) -> list[str]:
     return urls
 
 
+def normalize_remote(url: str) -> str:
+    """``host/path`` form of a git remote, so SSH and HTTPS spellings compare equal.
+
+    ``git@github.com:Acme/x.git``, ``ssh://git@github.com/Acme/x.git`` and
+    ``https://github.com/Acme/x`` all become ``github.com/acme/x``. Patterns go
+    through the same function, so ``github.com/acme`` matches all three.
+    """
+    u = url.strip().lower()
+    if "://" in u:
+        u = u.split("://", 1)[1]
+        u = u.split("@", 1)[1] if "@" in u.split("/", 1)[0] else u
+    elif ":" in u and "/" not in u.split(":", 1)[0]:
+        # scp-like: [user@]host:path
+        host, path = u.split(":", 1)
+        u = host.split("@", 1)[-1] + "/" + path.lstrip("/")
+    if u.endswith(".git"):
+        u = u[:-4]
+    return u.rstrip("/")
+
+
+def _remote_matches(prefix: str, url: str) -> bool:
+    """Whether ``url`` is ``prefix`` or lies under it, segment-wise.
+
+    ``github.com/acme`` matches ``github.com/acme/x`` but not
+    ``github.com/acme-fans/x``; both arguments are already normalized.
+    """
+    return url == prefix or url.startswith(prefix + "/")
+
+
 class ContextStore:
     """Reads and writes ``<backup_dir>/contexts.json``."""
 
@@ -275,8 +305,8 @@ class ContextStore:
         return removed
 
     def set_remote(self, pattern: str, context: str | None) -> None:
-        """Map a remote-URL substring to a context; ``None`` removes it."""
-        pattern = pattern.strip().lower()
+        """Map a remote ``host[/path]`` prefix to a context; ``None`` removes it."""
+        pattern = normalize_remote(pattern)
         if not pattern:
             raise ValueError("remote pattern must not be empty")
         if context is not None:
@@ -311,10 +341,10 @@ class ContextStore:
             k: v for k, v in data["remotes"].items() if v in DIRECTORY_CONTEXTS
         }
         if repo_root is not None and remotes:
-            urls = [u.lower() for u in git_remote_urls(repo_root)]
-            # Longest pattern first, so "gitlab.acme.com/oss" beats "gitlab.acme.com".
+            urls = [normalize_remote(u) for u in git_remote_urls(repo_root)]
+            # Longest prefix first, so "gitlab.acme.com/oss" beats "gitlab.acme.com".
             for pattern in sorted(remotes, key=len, reverse=True):
-                if any(pattern in url for url in urls):
+                if any(_remote_matches(normalize_remote(pattern), u) for u in urls):
                     return Resolution(remotes[pattern], "remote", pattern)
 
         return Resolution(data["default"], "default", "")
