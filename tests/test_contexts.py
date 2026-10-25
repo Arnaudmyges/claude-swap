@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from claude_swap import cli, hook
+from claude_swap import cli, hook, paths
 from claude_swap.autoswitch import NoSwitchEvent, SwitchEvent, TickOutcome
 from claude_swap.contexts import (
     MODE_ASYMMETRIC,
@@ -26,6 +26,7 @@ from claude_swap.contexts import (
     ContextStore,
     check,
 )
+from claude_swap.mappings import normalize_path
 from claude_swap.process_detection import ClaudeSession
 
 from tests.test_account_policy_store import PolicyStoreBase
@@ -90,7 +91,7 @@ def test_path_rule_covers_subdirectories(store, tmp_path):
     (work / "vpn" / "src").mkdir(parents=True)
     store.set_path(work, WORK)
     r = store.resolve(work / "vpn" / "src")
-    assert (r.context, r.source, r.detail) == (WORK, "path", str(work.resolve()))
+    assert (r.context, r.source, r.detail) == (WORK, "path", normalize_path(work))
 
 
 def test_sibling_prefix_does_not_match(store, tmp_path):
@@ -226,9 +227,10 @@ def hook_env(tmp_path, monkeypatch):
     config_dir = tmp_path / "claude-profile"
     config_dir.mkdir()
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config_dir))
-    backup = tmp_path / "data"
-    monkeypatch.setenv("XDG_DATA_HOME", str(backup))
-    store = ContextStore(backup / "claude-swap")
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    # Ask paths where the hook will look: XDG on Linux, the legacy
+    # ~/.claude-swap-backup (under the isolated home) on macOS and Windows.
+    store = ContextStore(paths.get_backup_root())
     work = tmp_path / "work"
     work.mkdir()
     store.set_path(work, WORK)
@@ -248,7 +250,6 @@ def _run_hook(event: str, cwd: Path) -> dict | None:
     return json.loads(out.getvalue()) if out.getvalue() else None
 
 
-@pytest.mark.skipif(os.name == "nt", reason="XDG backup root is POSIX-only")
 def test_hook_blocks_personal_account_in_work_dir(hook_env):
     store, work, login = hook_env
     login("me@perso.test")
@@ -261,7 +262,6 @@ def test_hook_blocks_personal_account_in_work_dir(hook_env):
     assert "Prompts will be blocked" in start["systemMessage"]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="XDG backup root is POSIX-only")
 def test_hook_allows_tagged_work_account(hook_env):
     store, work, login = hook_env
     login("me@acme.test")
@@ -272,7 +272,6 @@ def test_hook_allows_tagged_work_account(hook_env):
     assert "me@acme.test (work)" in start["hookSpecificOutput"]["additionalContext"]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="XDG backup root is POSIX-only")
 def test_hook_personal_dir_is_open_in_asymmetric_mode(hook_env, tmp_path):
     store, _, login = hook_env
     login("me@acme.test")
